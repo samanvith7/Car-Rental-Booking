@@ -1,81 +1,114 @@
-const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
-const dotenv = require('dotenv');
-
-// ❌ REMOVE MongoDB
-// const connectDB = require('./config/db');
-
-const { errorHandler, notFound } = require('./middleware/errorMiddleware');
-
-// ✅ PostgreSQL (Supabase)
-const pool = require('./db');
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const pool = require("./db");
 
 dotenv.config();
 
 const app = express();
 
-// Middleware
-app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "https://car-rental-booking-seven.vercel.app"
-  ],
-  credentials: true,
-}));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-}
+// ✅ CORS (VERY IMPORTANT)
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "https://car-rental-booking-seven.vercel.app",
+    ],
+    credentials: true,
+  })
+);
 
-// =========================
-// ROUTES (TEMPORARY FIX)
-// =========================
-
-// Root route
-app.get('/', (req, res) => {
-  res.json({ message: 'Car Rental API is running ✅' });
+// =====================
+// ROOT
+// =====================
+app.get("/", (req, res) => {
+  res.send("API Running ✅");
 });
 
-// Cars route (Supabase)
-app.get('/cars', async (req, res) => {
+// =====================
+// CARS
+// =====================
+app.get("/cars", async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM cars');
+    const result = await pool.query("SELECT * FROM cars");
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// =========================
-// COMMENT OLD ROUTES (IMPORTANT)
-// =========================
+// =====================
+// AUTH
+// =====================
 
-// ❌ These still use MongoDB — disable for now
-/*
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/cars', require('./routes/carRoutes'));
-app.use('/api/bookings', require('./routes/bookingRoutes'));
-app.use('/api/reviews', require('./routes/reviewRoutes'));
-app.use('/api/payments', require('./routes/paymentRoutes'));
-app.use('/api/admin', require('./routes/adminRoutes'));
-*/
+// REGISTER
+app.post("/auth/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
 
-// =========================
-// ERROR HANDLING
-// =========================
+    const hashed = await bcrypt.hash(password, 10);
 
-app.use(notFound);
-app.use(errorHandler);
+    const result = await pool.query(
+      "INSERT INTO users (name, email, password) VALUES ($1,$2,$3) RETURNING *",
+      [name, email, hashed]
+    );
 
-// =========================
-// SERVER START
-// =========================
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
+// LOGIN
+app.post("/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await pool.query("SELECT * FROM users WHERE email=$1", [
+      email,
+    ]);
+
+    if (!user.rows.length)
+      return res.status(400).json({ message: "User not found" });
+
+    const valid = await bcrypt.compare(password, user.rows[0].password);
+
+    if (!valid)
+      return res.status(400).json({ message: "Invalid password" });
+
+    const token = jwt.sign({ id: user.rows[0].id }, "secret", {
+      expiresIn: "1d",
+    });
+
+    res.json({ token, user: user.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =====================
+// BOOKINGS
+// =====================
+app.post("/bookings", async (req, res) => {
+  try {
+    const { user_id, car_id, start_date, end_date } = req.body;
+
+    const result = await pool.query(
+      "INSERT INTO bookings (user_id, car_id, start_date, end_date) VALUES ($1,$2,$3,$4) RETURNING *",
+      [user_id, car_id, start_date, end_date]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =====================
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
