@@ -31,14 +31,24 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => { loadUser(); }, [loadUser]);
 
-  const login = async (email, password) => {
-    const { data } = await api.post('/auth/login', { email, password });
-    const { token, ...userData } = data.data;
-    localStorage.setItem('token', token);
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setUser(userData);
-    return userData;
-  };
+const login = async (email, password) => {
+  const res = await api.post('/auth/login', { email, password });
+
+  const data = res.data;
+
+  const token = data.token;
+  const user = data.user;
+
+  // save token
+  localStorage.setItem('token', token);
+  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+  // set user
+  setUser(user);
+
+  return user;
+};
+  
 
   const register = async (formData) => {
     const { data } = await api.post('/auth/register', formData);
