@@ -50,6 +50,18 @@ app.post("/auth/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    console.log("Incoming data:", name, email);
+
+    const existing = await pool.query(
+      "SELECT * FROM users WHERE email=$1",
+      [email]
+    );
+
+    if (existing.rows.length > 0) {
+      console.log("User already exists");
+      return res.status(400).json({ message: "User already exists" });
+    }
+
     const hashed = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
@@ -57,12 +69,14 @@ app.post("/auth/register", async (req, res) => {
       [name, email, hashed]
     );
 
+    console.log("User created:", result.rows[0]);
+
     res.json(result.rows[0]);
   } catch (err) {
+    console.error("REGISTER ERROR:", err); // 👈 THIS IS IMPORTANT
     res.status(500).json({ error: err.message });
   }
 });
-
 // LOGIN
 app.post("/auth/login", async (req, res) => {
   try {
