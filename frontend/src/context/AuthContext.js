@@ -32,21 +32,29 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => { loadUser(); }, [loadUser]);
 
 const login = async (email, password) => {
-  const res = await api.post('/auth/login', { email, password });
+  try {
+    const res = await api.post('/auth/login', { email, password });
 
-  const data = res.data;
+    const data = res.data;
 
-  const token = data.token;
-  const user = data.user;
+    console.log("LOGIN RESPONSE:", data); // debug
 
-  // save token
-  localStorage.setItem('token', token);
-  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    const token = data.token;
+    const user = data.user;
 
-  // set user
-  setUser(user);
+    // store token
+    localStorage.setItem('token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-  return user;
+    // set user
+    setUser(user);
+
+    return user;
+
+  } catch (err) {
+    console.error("LOGIN ERROR FRONTEND:", err.response?.data);
+    throw err;
+  }
 };
   
 
